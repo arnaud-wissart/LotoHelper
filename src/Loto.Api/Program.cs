@@ -98,6 +98,244 @@ bool TryParseDateOnlyUtc(string value, out DateTime date) =>
 app.MapGet("/health", () => Results.Ok())
    .WithName("Health");
 
+app.MapGet("/api/stats/overview", async (LotoDbContext db, CancellationToken ct) =>
+{
+    var totalDraws = await db.Draws.CountAsync(ct);
+    if (totalDraws == 0)
+    {
+        return Results.Ok(new StatsOverviewDto());
+    }
+
+    var firstDrawDate = await db.Draws.MinAsync(d => d.DrawDate, ct);
+    var lastDrawDate = await db.Draws.MaxAsync(d => d.DrawDate, ct);
+
+    var dayCounts = await db.Draws
+        .GroupBy(d => d.DrawDayName)
+        .Select(g => new DayOfWeekCountDto
+        {
+            DayName = g.Key ?? "INCONNU",
+            Count = g.Count()
+        })
+        .OrderByDescending(x => x.Count)
+        .ToListAsync(ct);
+
+    var overview = new StatsOverviewDto
+    {
+        TotalDraws = totalDraws,
+        FirstDrawDate = firstDrawDate,
+        LastDrawDate = lastDrawDate,
+        DrawsPerDayOfWeek = dayCounts
+    };
+
+    return Results.Ok(overview);
+})
+.WithName("GetStatsOverview")
+.Produces<StatsOverviewDto>(StatusCodes.Status200OK);
+
+app.MapGet("/api/stats/frequencies", async (LotoDbContext db, CancellationToken ct) =>
+{
+    var draws = await db.Draws.AsNoTracking().ToListAsync(ct);
+    if (draws.Count == 0)
+    {
+        return Results.Ok(new StatsFrequenciesDto());
+    }
+
+    var mainFreq = new int[50];
+    var luckyFreq = new int[11];
+
+    foreach (var d in draws)
+    {
+        mainFreq[d.Number1]++;
+        mainFreq[d.Number2]++;
+        mainFreq[d.Number3]++;
+        mainFreq[d.Number4]++;
+        mainFreq[d.Number5]++;
+        luckyFreq[d.LuckyNumber]++;
+    }
+
+    var totalMain = mainFreq.Sum();
+    var totalLucky = luckyFreq.Sum();
+
+    var mainList = Enumerable.Range(1, 49)
+        .Select(n => new NumberFrequencyDto
+        {
+            Number = n,
+            Count = mainFreq[n],
+            Frequency = totalMain > 0 ? (double)mainFreq[n] / totalMain : 0
+        })
+        .OrderByDescending(x => x.Count)
+        .ToList();
+
+    var luckyList = Enumerable.Range(1, 10)
+        .Select(n => new NumberFrequencyDto
+        {
+            Number = n,
+            Count = luckyFreq[n],
+            Frequency = totalLucky > 0 ? (double)luckyFreq[n] / totalLucky : 0
+        })
+        .OrderByDescending(x => x.Count)
+        .ToList();
+
+    var dto = new StatsFrequenciesDto
+    {
+        MainNumbers = mainList,
+        LuckyNumbers = luckyList
+    };
+
+    return Results.Ok(dto);
+})
+.WithName("GetStatsFrequencies")
+.Produces<StatsFrequenciesDto>(StatusCodes.Status200OK);
+
+app.MapGet("/api/stats/patterns", async (
+    int? bucketSize,
+    LotoDbContext db,
+    CancellationToken ct) =>
+{
+    var draws = await db.Draws.AsNoTracking().ToListAsync(ct);
+    if (draws.Count == 0)
+    {
+        return Results.Ok(new PatternDistributionDto());
+    }
+
+    var sums = draws.Select(d => d.Number1 + d.Number2 + d.Number3 + d.Number4 + d.Number5).ToList();
+    var minSum = sums.Min();
+    var maxSum = sums.Max();
+
+    var size = bucketSize.GetValueOrDefault(10);
+    if (size <= 0)
+    {
+        size = 10;
+    }
+
+    var buckets = new List<SumBucketDto>();
+    for (int start = (minSum / size) * size; start <= maxSum; start += size)
+    {
+        int end = start + size - 1;
+        var count = sums.Count(s => s >= start && s <= end);
+        buckets.Add(new SumBucketDto
+        {
+            MinInclusive = start,
+            MaxInclusive = end,
+            Count = count
+        });
+    }
+
+    var evenCountDist = new Dictionary<int, int>();
+    var lowCountDist = new Dictionary<int, int>();
+
+    foreach (var d in draws)
+    {
+        int[] nums = { d.Number1, d.Number2, d.Number3, d.Number4, d.Number5 };
+
+        var evenCount = nums.Count(n => n % 2 == 0);
+        var lowCount = nums.Count(n => n <= 25);
+
+        evenCountDist[evenCount] = evenCountDist.TryGetValue(evenCount, out var evc) ? evc + 1 : 1;
+        lowCountDist[lowCount] = lowCountDist.TryGetValue(lowCount, out var lc) ? lc + 1 : 1;
+    }
+
+    var dto = new PatternDistributionDto
+    {
+        SumBuckets = buckets,
+        EvenCountDistribution = evenCountDist,
+        LowCountDistribution = lowCountDist
+    };
+
+    return Results.Ok(dto);
+})
+.WithName("GetStatsPatterns")
+.Produces<PatternDistributionDto>(StatusCodes.Status200OK);
+
+app.MapGet("/api/stats/cooccurrence", async (
+    int baseNumber,
+    int? top,
+    LotoDbContext db,
+    CancellationToken ct) =>
+{
+    if (baseNumber < 1 || baseNumber > 49)
+    {
+        return Results.BadRequest("baseNumber must be between 1 and 49.");
+    }
+
+    var draws = await db.Draws.AsNoTracking().ToListAsync(ct);
+    var totalDraws = draws.Count;
+    if (totalDraws == 0)
+    {
+        return Results.Ok(new CooccurrenceStatsDto
+        {
+            BaseNumber = baseNumber
+        });
+    }
+
+    var drawsWithBase = draws
+        .Where(d =>
+            d.Number1 == baseNumber ||
+            d.Number2 == baseNumber ||
+            d.Number3 == baseNumber ||
+            d.Number4 == baseNumber ||
+            d.Number5 == baseNumber)
+        .ToList();
+
+    var drawsContainingBaseCount = drawsWithBase.Count;
+
+    var globalCount = new int[50];
+    foreach (var d in draws)
+    {
+        globalCount[d.Number1]++;
+        globalCount[d.Number2]++;
+        globalCount[d.Number3]++;
+        globalCount[d.Number4]++;
+        globalCount[d.Number5]++;
+    }
+
+    var coCounts = new int[50];
+
+    foreach (var d in drawsWithBase)
+    {
+        int[] nums = { d.Number1, d.Number2, d.Number3, d.Number4, d.Number5 };
+        foreach (var n in nums)
+        {
+            if (n == baseNumber) continue;
+            coCounts[n]++;
+        }
+    }
+
+    var coList = Enumerable.Range(1, 49)
+        .Where(n => n != baseNumber && coCounts[n] > 0)
+        .Select(n => new CooccurringNumberDto
+        {
+            Number = n,
+            CooccurrenceCount = coCounts[n],
+            ConditionalProbability = drawsContainingBaseCount > 0
+                ? (double)coCounts[n] / drawsContainingBaseCount
+                : 0,
+            GlobalProbability = totalDraws > 0
+                ? (double)globalCount[n] / totalDraws
+                : 0
+        })
+        .OrderByDescending(x => x.CooccurrenceCount)
+        .ToList();
+
+    var limit = top.GetValueOrDefault(15);
+    if (limit > 0 && coList.Count > limit)
+    {
+        coList = coList.Take(limit).ToList();
+    }
+
+    var result = new CooccurrenceStatsDto
+    {
+        BaseNumber = baseNumber,
+        TotalDraws = totalDraws,
+        DrawsContainingBase = drawsContainingBaseCount,
+        Cooccurrences = coList
+    };
+
+    return Results.Ok(result);
+})
+.WithName("GetStatsCooccurrence")
+.Produces<CooccurrenceStatsDto>(StatusCodes.Status200OK);
+
 app.MapGet("/api/draws", async ([AsParameters] GetDrawsRequest request, LotoDbContext db, CancellationToken ct) =>
     {
         var page = request.Page < 1 ? 1 : request.Page;

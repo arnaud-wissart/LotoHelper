@@ -1,5 +1,8 @@
 import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { MatCardModule } from '@angular/material/card';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatSelectModule } from '@angular/material/select';
 import { StatsPageComponent } from './stats-page/stats-page.component';
 
 
@@ -9,7 +12,10 @@ import { StatsPageComponent } from './stats-page/stats-page.component';
     StatsPageComponent
   ],
   imports: [
-    CommonModule
+    CommonModule,
+    MatCardModule,
+    MatFormFieldModule,
+    MatSelectModule
   ]
 })
 export class StatsModule { }

@@ -23,6 +23,10 @@
           </mat-option>
         </mat-select>
       </mat-form-field>
+
+      <p class="strategy-description">
+        {{ selectedStrategyDescription }}
+      </p>
     </div>
 
     <button mat-raised-button color="primary" (click)="onGenerateClick()" [disabled]="isLoading">

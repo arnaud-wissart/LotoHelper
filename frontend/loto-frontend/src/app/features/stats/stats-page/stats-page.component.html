@@ -1,25 +1,252 @@
-<section class="page">
+<section class="page stats-container">
   <header class="page__header">
     <div>
       <p class="eyebrow">Statistiques</p>
-      <h1>Fréquences (mock)</h1>
-      <p class="subtitle">En attendant l’endpoint /api/stats/frequency, un aperçu statique.</p>
+      <h1>Statistiques Loto</h1>
+      <p class="subtitle">Synthèse des tirages historiques et fréquences réelles.</p>
     </div>
-    <div class="meta">Dernière mise à jour : {{ lastUpdated | date:'short' }}</div>
+    <div class="meta" *ngIf="overview?.lastDrawDate">
+      Mis à jour au {{ overview?.lastDrawDate | date:'dd/MM/yyyy' }}
+    </div>
   </header>
 
-  <div class="cards">
-    <article class="card" *ngFor="let item of frequencyMock">
-      <header class="card__header">
-        <span class="ball">{{ item.number }}</span>
-        <div class="card__meta">
-          <p class="card__label">Occurrences</p>
-          <p class="card__value">{{ item.count }}</p>
-        </div>
-      </header>
-      <div class="bar-track" role="presentation">
-        <div class="bar-fill" [style.width.%]="(item.count / maxCount) * 100"></div>
-      </div>
-    </article>
+  <div *ngIf="isLoading" class="status" aria-live="polite">Chargement des statistiques...</div>
+  <div *ngIf="!isLoading && errorMessage" class="status status--error" role="alert">
+    {{ errorMessage }}
   </div>
+
+  <ng-container *ngIf="!isLoading && !errorMessage">
+    <section class="stats-overview" *ngIf="overview">
+      <mat-card class="overview-card">
+        <mat-card-title>Résumé</mat-card-title>
+        <mat-card-content>
+          <div class="overview-grid">
+            <div class="overview-item">
+              <p class="label">Nombre total de tirages</p>
+              <p class="value">{{ overview.totalDraws }}</p>
+            </div>
+            <div class="overview-item">
+              <p class="label">Premier tirage</p>
+              <p class="value" *ngIf="overview.firstDrawDate; else noFirstDate">
+                {{ overview.firstDrawDate | date:'dd/MM/yyyy' }}
+              </p>
+              <ng-template #noFirstDate>
+                <p class="value muted">-</p>
+              </ng-template>
+            </div>
+            <div class="overview-item">
+              <p class="label">Dernier tirage</p>
+              <p class="value" *ngIf="overview.lastDrawDate; else noLastDate">
+                {{ overview.lastDrawDate | date:'dd/MM/yyyy' }}
+              </p>
+              <ng-template #noLastDate>
+                <p class="value muted">-</p>
+              </ng-template>
+            </div>
+          </div>
+
+          <div class="day-of-week" *ngIf="overview.drawsPerDayOfWeek?.length">
+            <h3>Répartition par jour</h3>
+            <ul>
+              <li *ngFor="let d of overview.drawsPerDayOfWeek">
+                <span class="day-label">{{ d.dayName }}</span>
+                <span class="chip">{{ d.count }}</span>
+              </li>
+            </ul>
+          </div>
+        </mat-card-content>
+      </mat-card>
+    </section>
+
+    <section class="stats-frequencies" *ngIf="frequencies">
+      <div class="freq-block">
+        <mat-card>
+          <mat-card-title>Top 10 numéros les plus fréquents</mat-card-title>
+          <mat-card-content>
+            <ul class="bars-list">
+              <li class="bar-row" *ngFor="let n of hotMainNumbers">
+                <div class="bar-meta">
+                  <span class="ball">{{ n.number }}</span>
+                  <div>
+                    <div class="bar-label">Occurrences</div>
+                    <div class="bar-value">{{ n.count }} ({{ (n.frequency * 100) | number:'1.1-1' }} %)</div>
+                  </div>
+                </div>
+              </li>
+            </ul>
+          </mat-card-content>
+        </mat-card>
+      </div>
+
+      <div class="freq-block">
+        <mat-card>
+          <mat-card-title>Top 10 numéros les moins fréquents</mat-card-title>
+          <mat-card-content>
+            <ul class="bars-list">
+              <li class="bar-row" *ngFor="let n of coldMainNumbers">
+                <div class="bar-meta">
+                  <span class="ball alt">{{ n.number }}</span>
+                  <div>
+                    <div class="bar-label">Occurrences</div>
+                    <div class="bar-value">{{ n.count }} ({{ (n.frequency * 100) | number:'1.1-1' }} %)</div>
+                  </div>
+                </div>
+              </li>
+            </ul>
+          </mat-card-content>
+        </mat-card>
+      </div>
+    </section>
+
+    <section class="stats-frequencies" *ngIf="frequencies">
+      <div class="freq-block">
+        <mat-card>
+          <mat-card-title>Top 5 numéros chance les plus fréquents</mat-card-title>
+          <mat-card-content>
+            <ul class="bars-list">
+              <li class="bar-row" *ngFor="let n of hotLuckyNumbers">
+                <div class="bar-meta">
+                  <span class="ball lucky">{{ n.number }}</span>
+                  <div>
+                    <div class="bar-label">Occurrences</div>
+                    <div class="bar-value">{{ n.count }} ({{ (n.frequency * 100) | number:'1.1-1' }} %)</div>
+                  </div>
+                </div>
+              </li>
+            </ul>
+          </mat-card-content>
+        </mat-card>
+      </div>
+
+      <div class="freq-block">
+        <mat-card>
+          <mat-card-title>Top 5 numéros chance les moins fréquents</mat-card-title>
+          <mat-card-content>
+            <ul class="bars-list">
+              <li class="bar-row" *ngFor="let n of coldLuckyNumbers">
+                <div class="bar-meta">
+                  <span class="ball lucky alt">{{ n.number }}</span>
+                  <div>
+                    <div class="bar-label">Occurrences</div>
+                    <div class="bar-value">{{ n.count }} ({{ (n.frequency * 100) | number:'1.1-1' }} %)</div>
+                  </div>
+                </div>
+              </li>
+            </ul>
+          </mat-card-content>
+        </mat-card>
+      </div>
+    </section>
+
+    <section class="stats-patterns" *ngIf="patterns">
+      <h2>Patrons de tirage</h2>
+      <div class="patterns-grid">
+        <mat-card>
+          <mat-card-title>Distribution de la somme des 5 numéros</mat-card-title>
+          <mat-card-content>
+            <ul class="bars-list patterns-list">
+              <li class="bar-row pattern-row" *ngFor="let b of patterns.sumBuckets">
+                <div class="bar-meta spread">
+                  <div class="bar-label">{{ b.minInclusive }} - {{ b.maxInclusive }}</div>
+                  <div class="bar-value">{{ b.count }}</div>
+                </div>
+                <div class="bar-track slim" role="presentation">
+                  <div class="bar-fill" [style.width.%]="getRelativeWidth(b.count, getMaxBucketCount())"></div>
+                </div>
+              </li>
+            </ul>
+          </mat-card-content>
+        </mat-card>
+
+        <mat-card>
+          <mat-card-title>Nombre de numéros pairs</mat-card-title>
+          <mat-card-content>
+            <ul class="bars-list patterns-list">
+              <li class="bar-row pattern-row" *ngFor="let k of getKeys(patterns.evenCountDistribution)">
+                <div class="bar-meta spread">
+                  <div class="bar-label">Pairs : {{ k }}</div>
+                  <div class="bar-value">{{ patterns.evenCountDistribution[k] }}</div>
+                </div>
+                <div class="bar-track slim" role="presentation">
+                  <div class="bar-fill" [style.width.%]="getRelativeWidth(patterns.evenCountDistribution[k], getMaxDistributionValue(patterns.evenCountDistribution))"></div>
+                </div>
+              </li>
+            </ul>
+          </mat-card-content>
+        </mat-card>
+
+        <mat-card>
+          <mat-card-title>Nombre de numéros entre 1 et 25</mat-card-title>
+          <mat-card-content>
+            <ul class="bars-list patterns-list">
+              <li class="bar-row pattern-row" *ngFor="let k of getKeys(patterns.lowCountDistribution)">
+                <div class="bar-meta spread">
+                  <div class="bar-label">Low (≤ 25) : {{ k }}</div>
+                  <div class="bar-value">{{ patterns.lowCountDistribution[k] }}</div>
+                </div>
+                <div class="bar-track slim" role="presentation">
+                  <div class="bar-fill" [style.width.%]="getRelativeWidth(patterns.lowCountDistribution[k], getMaxDistributionValue(patterns.lowCountDistribution))"></div>
+                </div>
+              </li>
+            </ul>
+          </mat-card-content>
+        </mat-card>
+      </div>
+    </section>
+
+    <section class="stats-cooccurrence">
+      <h2>Co-occurrence des numéros</h2>
+
+      <div class="cooccurrence-controls">
+        <mat-form-field appearance="outline">
+          <mat-label>Numéro de base</mat-label>
+          <mat-select [(value)]="selectedBaseNumber" (selectionChange)="loadCooccurrence()">
+            <mat-option *ngFor="let n of numbersRange" [value]="n">
+              {{ n }}
+            </mat-option>
+          </mat-select>
+        </mat-form-field>
+      </div>
+
+      <div *ngIf="isLoadingCooccurrence">Chargement des co-occurrences...</div>
+
+      <mat-card *ngIf="cooccurrence && !isLoadingCooccurrence">
+        <mat-card-title>
+          Numéros co-occurrents avec {{ cooccurrence.baseNumber }}
+        </mat-card-title>
+        <mat-card-content>
+          <p *ngIf="cooccurrence.drawsContainingBase > 0">
+            Le numéro {{ cooccurrence.baseNumber }} apparaît dans
+            {{ cooccurrence.drawsContainingBase }} tirage(s) sur {{ cooccurrence.totalDraws }}.
+          </p>
+          <p *ngIf="cooccurrence.drawsContainingBase === 0">
+            Le numéro {{ cooccurrence.baseNumber }} n'apparaît dans aucun tirage de l'historique chargé.
+          </p>
+
+          <table class="freq-table" *ngIf="cooccurrence.cooccurrences.length > 0">
+            <thead>
+              <tr>
+                <th>Numéro</th>
+                <th>Co-occurrences</th>
+                <th>P(num | {{ cooccurrence.baseNumber }})</th>
+                <th>P(num)</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let c of cooccurrence.cooccurrences">
+                <td>{{ c.number }}</td>
+                <td>{{ c.cooccurrenceCount }}</td>
+                <td>{{ (c.conditionalProbability * 100) | number:'1.2-2' }} %</td>
+                <td>{{ (c.globalProbability * 100) | number:'1.2-2' }} %</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <p *ngIf="cooccurrence.cooccurrences.length === 0 && cooccurrence.drawsContainingBase > 0">
+            Aucun autre numéro co-occurrent n'a été trouvé (cas très improbable, vérifier les données).
+          </p>
+        </mat-card-content>
+      </mat-card>
+    </section>
+  </ng-container>
 </section>
