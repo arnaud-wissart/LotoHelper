@@ -2,14 +2,12 @@ using System.Globalization;
 using Loto.Api.Contracts;
 using Loto.Api.Services;
 using Loto.Infrastructure;
+using Loto.Infrastructure.Observability;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Localization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using OpenTelemetry.Metrics;
-using OpenTelemetry.Resources;
-using OpenTelemetry.Trace;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -31,23 +29,11 @@ builder.Services.AddDbContext<LotoDbContext>(options =>
 builder.Services.AddScoped<ILotoPredictionService, LotoPredictionService>();
 builder.Services.AddScoped<IStrategyBacktestService, StrategyBacktestService>();
 
-builder.Services.AddOpenTelemetry()
-    .ConfigureResource(resource => resource.AddService(serviceName: "Loto.Api", serviceVersion: "1.0.0"))
-    .WithTracing(tracing =>
-    {
-        tracing.AddAspNetCoreInstrumentation();
-        tracing.AddHttpClientInstrumentation();
-        tracing.AddEntityFrameworkCoreInstrumentation();
-        tracing.AddOtlpExporter();
-    })
-    .WithMetrics(metrics =>
-    {
-        metrics.AddAspNetCoreInstrumentation();
-        metrics.AddHttpClientInstrumentation();
-        metrics.AddRuntimeInstrumentation();
-        metrics.AddMeter(LotoPredictionService.MeterName);
-        metrics.AddOtlpExporter();
-    });
+builder.Services.AddLotoOpenTelemetry(
+    builder.Configuration,
+    serviceName: "loto-api",
+    includeAspNetCoreInstrumentation: true,
+    configureMetrics: metrics => metrics.AddMeter(LotoPredictionService.MeterName));
 
 var app = builder.Build();
 
@@ -96,8 +82,9 @@ bool TryParseDateOnlyUtc(string value, out DateTime date) =>
         DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
         out date);
 
-app.MapGet("/health", () => Results.Ok())
-   .WithName("Health");
+app.MapGet("/health", () => Results.Ok(new { status = "ok" }))
+   .WithName("Health")
+   .ExcludeFromDescription();
 
 app.MapGet("/api/stats/overview", async (LotoDbContext db, CancellationToken ct) =>
 {

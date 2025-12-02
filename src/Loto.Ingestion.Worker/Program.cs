@@ -1,9 +1,7 @@
 using Loto.Ingestion.Worker;
 using Loto.Infrastructure;
+using Loto.Infrastructure.Observability;
 using Microsoft.EntityFrameworkCore;
-using OpenTelemetry.Metrics;
-using OpenTelemetry.Resources;
-using OpenTelemetry.Trace;
 
 var builder = Host.CreateApplicationBuilder(args);
 
@@ -36,22 +34,11 @@ builder.Services.AddScoped<IFdjDataSource>(sp =>
 builder.Services.AddScoped<IFdjParser, NewLotoZipCsvParser>();
 builder.Services.AddScoped<IFdjIngestionService, FdjIngestionService>();
 
-builder.Services.AddOpenTelemetry()
-    .ConfigureResource(resource => resource.AddService(serviceName: "Loto.Ingestion.Worker", serviceVersion: "1.0.0"))
-    .WithTracing(tracing =>
-    {
-        tracing.AddSource(FdjIngestionService.ActivitySourceName);
-        tracing.AddHttpClientInstrumentation();
-        tracing.AddEntityFrameworkCoreInstrumentation();
-        tracing.AddOtlpExporter();
-    })
-    .WithMetrics(metrics =>
-    {
-        metrics.AddMeter(FdjIngestionService.MeterName);
-        metrics.AddHttpClientInstrumentation();
-        metrics.AddRuntimeInstrumentation();
-        metrics.AddOtlpExporter();
-    });
+builder.Services.AddLotoOpenTelemetry(
+    builder.Configuration,
+    serviceName: "loto-worker",
+    configureTracing: tracing => tracing.AddSource(FdjIngestionService.ActivitySourceName),
+    configureMetrics: metrics => metrics.AddMeter(FdjIngestionService.MeterName));
 
 builder.Services.AddHostedService<FdjIngestionWorker>();
 

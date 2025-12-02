@@ -1,0 +1,111 @@
+services:
+  loto-postgres:
+    image: postgres:16
+    container_name: loto-postgres
+    environment:
+      POSTGRES_USER: loto
+      POSTGRES_PASSWORD: loto
+      POSTGRES_DB: loto-db
+    volumes:
+      - loto_postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U loto"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  loto-api:
+    build:
+      context: .
+      dockerfile: src/Loto.Api/Dockerfile
+    container_name: loto-api
+    environment:
+      ConnectionStrings__loto-db: Host=loto-postgres;Port=5432;Database=loto-db;Username=loto;Password=loto
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      DOTNET_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:8080
+    depends_on:
+      loto-postgres:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail http://localhost:8080/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  loto-worker:
+    build:
+      context: .
+      dockerfile: src/Loto.Ingestion.Worker/Dockerfile
+    container_name: loto-worker
+    environment:
+      ConnectionStrings__loto-db: Host=loto-postgres;Port=5432;Database=loto-db;Username=loto;Password=loto
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      DOTNET_ENVIRONMENT: Production
+    depends_on:
+      loto-postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  loto-frontend:
+    build:
+      context: frontend/loto-frontend
+      dockerfile: Dockerfile
+    container_name: loto-frontend
+    depends_on:
+      loto-api:
+        condition: service_started
+    ports:
+      - "4173:80"
+    restart: unless-stopped
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    container_name: otel-collector
+    command: ["--config", "/etc/otel-collector-config.yml"]
+    volumes:
+      - ./monitoring/otel-collector-config.yml:/etc/otel-collector-config.yml:ro
+    ports:
+      - "4317:4317"
+      - "8889:8889"
+    depends_on:
+      loto-api:
+        condition: service_started
+      loto-worker:
+        condition: service_started
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    command: ["--config.file=/etc/prometheus/prometheus.yml"]
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+    depends_on:
+      otel-collector:
+        condition: service_started
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    depends_on:
+      prometheus:
+        condition: service_started
+    volumes:
+      - grafana_data:/var/lib/grafana
+    restart: unless-stopped
+
+volumes:
+  loto_postgres_data:
+  grafana_data:
