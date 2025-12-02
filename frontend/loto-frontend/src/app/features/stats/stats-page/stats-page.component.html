@@ -1,0 +1,25 @@
+<section class="page">
+  <header class="page__header">
+    <div>
+      <p class="eyebrow">Statistiques</p>
+      <h1>Fréquences (mock)</h1>
+      <p class="subtitle">En attendant l’endpoint /api/stats/frequency, un aperçu statique.</p>
+    </div>
+    <div class="meta">Dernière mise à jour : {{ lastUpdated | date:'short' }}</div>
+  </header>
+
+  <div class="cards">
+    <article class="card" *ngFor="let item of frequencyMock">
+      <header class="card__header">
+        <span class="ball">{{ item.number }}</span>
+        <div class="card__meta">
+          <p class="card__label">Occurrences</p>
+          <p class="card__value">{{ item.count }}</p>
+        </div>
+      </header>
+      <div class="bar-track" role="presentation">
+        <div class="bar-fill" [style.width.%]="(item.count / maxCount) * 100"></div>
+      </div>
+    </article>
+  </div>
+</section>

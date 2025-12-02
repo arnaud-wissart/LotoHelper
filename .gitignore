@@ -416,3 +416,22 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# JetBrains / Rider
+.idea/
+
+# Angular / Node outputs
+**/node_modules/
+**/dist/
+**/.angular/
+**/coverage/
+pnpm-lock.yaml
+package-lock.json
+
+# Environment / secrets
+.env.local
+.env.*.local

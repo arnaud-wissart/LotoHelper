@@ -1,0 +1,42 @@
+<section class="page">
+  <header class="page__header">
+    <div>
+      <p class="eyebrow">Tirages</p>
+      <h1>Derniers résultats</h1>
+      <p class="subtitle">Liste des 100 derniers tirages connus.</p>
+    </div>
+  </header>
+
+  <div *ngIf="isLoading" class="status" aria-live="polite">Chargement des tirages...</div>
+
+  <div *ngIf="!isLoading && errorMessage" class="status status--error" role="alert">
+    {{ errorMessage }}
+    <button type="button" class="retry" (click)="retry()">Réessayer</button>
+  </div>
+
+  <div *ngIf="!isLoading && !errorMessage && draws.length === 0" class="status">
+    Aucune donnée à afficher pour le moment.
+  </div>
+
+  <table *ngIf="!isLoading && !errorMessage && draws.length > 0" class="draws-table" aria-label="Derniers tirages">
+    <caption class="sr-only">Tableau des 100 derniers tirages</caption>
+    <thead>
+      <tr>
+        <th scope="col">Date</th>
+        <th scope="col">Numéros</th>
+        <th scope="col">Chance</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr *ngFor="let draw of draws">
+        <td data-label="Date">{{ formatDate(draw.drawDate) }}</td>
+        <td class="numbers" data-label="Numéros">
+          <span class="ball" *ngFor="let num of [draw.number1, draw.number2, draw.number3, draw.number4, draw.number5]">{{ num }}</span>
+        </td>
+        <td data-label="Chance">
+          <span class="ball lucky">{{ draw.luckyNumber }}</span>
+        </td>
+      </tr>
+    </tbody>
+  </table>
+</section>
