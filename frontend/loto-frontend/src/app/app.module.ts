@@ -9,6 +9,7 @@ import { AppRoutingModule } from './app-routing.module';
 import { AppComponent } from './app.component';
 import { DrawsModule } from './features/draws/draws.module';
 import { PredictionsModule } from './features/predictions/predictions.module';
+import { StrategyAnalysisModule } from './features/strategy-analysis/strategy-analysis.module';
 import { StatsModule } from './features/stats/stats.module';
 
 registerLocaleData(localeFr);
@@ -24,6 +25,7 @@ registerLocaleData(localeFr);
     AppRoutingModule,
     DrawsModule,
     PredictionsModule,
+    StrategyAnalysisModule,
     StatsModule
   ],
   providers: [

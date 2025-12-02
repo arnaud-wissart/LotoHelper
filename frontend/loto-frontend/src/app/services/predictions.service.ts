@@ -9,8 +9,7 @@ import { PredictionRequestDto, PredictionStrategy, PredictionsResponse } from '.
 export class PredictionsService {
   constructor(private readonly http: HttpClient) { }
 
-  generate(count: number, strategy: PredictionStrategy): Observable<PredictionsResponse> {
-    const body: PredictionRequestDto = { count, strategy };
-    return this.http.post<PredictionsResponse>('/api/predictions', body);
+  generate(request: PredictionRequestDto): Observable<PredictionsResponse> {
+    return this.http.post<PredictionsResponse>('/api/predictions', request);
   }
 }

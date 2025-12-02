@@ -29,6 +29,7 @@ builder.Services.AddDbContext<LotoDbContext>(options =>
     options.UseNpgsql(connectionString));
 
 builder.Services.AddScoped<ILotoPredictionService, LotoPredictionService>();
+builder.Services.AddScoped<IStrategyBacktestService, StrategyBacktestService>();
 
 builder.Services.AddOpenTelemetry()
     .ConfigureResource(resource => resource.AddService(serviceName: "Loto.Api", serviceVersion: "1.0.0"))
@@ -419,13 +420,86 @@ app.MapGet("/api/draws", async ([AsParameters] GetDrawsRequest request, LotoDbCo
     .WithName("GetDraws")
     .WithOpenApi();
 
+app.MapPost("/api/analysis/strategy-backtest", async (
+    StrategyBacktestRequest request,
+    IStrategyBacktestService backtestService,
+    CancellationToken ct) =>
+{
+    try
+    {
+        var result = await backtestService.BacktestAsync(request, ct);
+        return Results.Ok(result);
+    }
+    catch (ArgumentException ex)
+    {
+        return Results.BadRequest(ex.Message);
+    }
+})
+.WithName("BacktestStrategy")
+.Produces<StrategyBacktestResultDto>(StatusCodes.Status200OK);
+
 app.MapPost("/api/predictions", async (
     PredictionRequest request,
     ILotoPredictionService predictionService,
     CancellationToken ct) =>
 {
     var count = request.Count <= 0 ? 1 : Math.Min(request.Count, 100);
-    var result = await predictionService.GeneratePredictionsAsync(count, request.Strategy, ct);
+    var includeSet = new HashSet<int>();
+    if (request.IncludeNumbers is { Length: > 0 })
+    {
+        if (request.IncludeNumbers.Length > 5)
+        {
+            return Results.BadRequest("includeNumbers ne peut pas contenir plus de 5 valeurs.");
+        }
+
+        foreach (var n in request.IncludeNumbers)
+        {
+            if (n < 1 || n > 49)
+            {
+                return Results.BadRequest("includeNumbers doit contenir des valeurs entre 1 et 49.");
+            }
+
+            includeSet.Add(n);
+        }
+    }
+
+    var excludeSet = new HashSet<int>();
+    if (request.ExcludeNumbers is { Length: > 0 })
+    {
+        foreach (var n in request.ExcludeNumbers)
+        {
+            if (n < 1 || n > 49)
+            {
+                return Results.BadRequest("excludeNumbers doit contenir des valeurs entre 1 et 49.");
+            }
+
+            excludeSet.Add(n);
+        }
+    }
+
+    PredictionConstraints? constraints = null;
+    var hasConstraints =
+        request.MinSum.HasValue || request.MaxSum.HasValue ||
+        request.MinEven.HasValue || request.MaxEven.HasValue ||
+        request.MinLow.HasValue || request.MaxLow.HasValue ||
+        includeSet.Count > 0 || excludeSet.Count > 0;
+
+    if (hasConstraints)
+    {
+        constraints = new PredictionConstraints
+        {
+            MinSum = request.MinSum,
+            MaxSum = request.MaxSum,
+            MinEven = request.MinEven,
+            MaxEven = request.MaxEven,
+            MinLow = request.MinLow,
+            MaxLow = request.MaxLow,
+            IncludeNumbers = includeSet,
+            ExcludeNumbers = excludeSet
+        };
+    }
+
+    var result = await predictionService.GeneratePredictionsAsync(count, request.Strategy, constraints, ct);
     return Results.Ok(result);
 })
 .WithName("GeneratePredictions")

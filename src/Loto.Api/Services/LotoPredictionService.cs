@@ -30,35 +30,48 @@ public sealed class LotoPredictionService : ILotoPredictionService
         _logger = logger;
     }
 
-    public async Task<PredictionsResponse> GeneratePredictionsAsync(int count, PredictionStrategy strategy, CancellationToken cancellationToken)
+    public async Task<PredictionsResponse> GeneratePredictionsAsync(
+        int count,
+        PredictionStrategy strategy,
+        PredictionConstraints? constraints,
+        CancellationToken cancellationToken,
+        Random? random = null,
+        IReadOnlyList<Draw>? preloadedDraws = null)
     {
         var success = false;
+        var randomToUse = random ?? _random;
         try
         {
-            var draws = await _dbContext.Draws.AsNoTracking().ToListAsync(cancellationToken);
+            var draws = preloadedDraws ?? await _dbContext.Draws.AsNoTracking().ToListAsync(cancellationToken);
 
             var predictions = strategy switch
             {
                 PredictionStrategy.Uniform => GeneratePredictionsWithWeights(
                     BuildUniformWeights(MainNumbersMax),
                     BuildUniformWeights(LuckyNumbersMax),
-                    count),
+                    count,
+                    randomToUse,
+                    constraints),
 
-                PredictionStrategy.FrequencyGlobal => GenerateFrequencyBasedPredictions(draws, count),
+                PredictionStrategy.FrequencyGlobal => GenerateFrequencyBasedPredictions(draws, count, randomToUse, constraints),
 
                 PredictionStrategy.FrequencyRecent => GenerateFrequencyBasedPredictions(
                     draws.Where(d => d.DrawDate >= DateTime.UtcNow.Add(-RecentWindow)),
                     count,
+                    randomToUse,
+                    constraints,
                     draws),
 
-                PredictionStrategy.Cold => GenerateColdPredictions(draws, count),
+                PredictionStrategy.Cold => GenerateColdPredictions(draws, count, randomToUse, constraints),
 
-                PredictionStrategy.Cooccurrence => GenerateCooccurrencePredictions(draws, count),
+                PredictionStrategy.Cooccurrence => GenerateCooccurrencePredictions(draws, count, randomToUse, constraints),
 
                 _ => GeneratePredictionsWithWeights(
                     BuildUniformWeights(MainNumbersMax),
                     BuildUniformWeights(LuckyNumbersMax),
-                    count)
+                    count,
+                    randomToUse,
+                    constraints)
             };
 
             success = true;
@@ -99,7 +112,7 @@ public sealed class LotoPredictionService : ILotoPredictionService
         _ => "unknown"
     };
 
-    private List<PredictedDrawDto> GenerateFrequencyBasedPredictions(IEnumerable<Draw> draws, int count, IEnumerable<Draw>? fallbackDraws = null)
+    private List<PredictedDrawDto> GenerateFrequencyBasedPredictions(IEnumerable<Draw> draws, int count, Random random, PredictionConstraints? constraints, IEnumerable<Draw>? fallbackDraws = null)
     {
         var selectedDraws = draws.ToList();
         if (!selectedDraws.Any() && fallbackDraws is not null)
@@ -112,10 +125,10 @@ public sealed class LotoPredictionService : ILotoPredictionService
         var mainWeights = BuildWeights(mainFreq, totalMain, MainNumbersMax);
         var luckyWeights = BuildWeights(luckyFreq, totalLucky, LuckyNumbersMax);
 
-        return GeneratePredictionsWithWeights(mainWeights, luckyWeights, count);
+        return GeneratePredictionsWithWeights(mainWeights, luckyWeights, count, random, constraints);
     }
 
-    private List<PredictedDrawDto> GenerateColdPredictions(IEnumerable<Draw> draws, int count)
+    private List<PredictedDrawDto> GenerateColdPredictions(IEnumerable<Draw> draws, int count, Random random, PredictionConstraints? constraints)
     {
         var drawsList = draws.ToList();
         var (mainFreq, luckyFreq, _, _) = BuildFrequencies(drawsList);
@@ -123,10 +136,10 @@ public sealed class LotoPredictionService : ILotoPredictionService
         var mainWeights = BuildColdWeights(mainFreq, MainNumbersMax);
         var luckyWeights = BuildColdWeights(luckyFreq, LuckyNumbersMax);
 
-        return GeneratePredictionsWithWeights(mainWeights, luckyWeights, count);
+        return GeneratePredictionsWithWeights(mainWeights, luckyWeights, count, random, constraints);
     }
 
-    private List<PredictedDrawDto> GenerateCooccurrencePredictions(IEnumerable<Draw> draws, int count)
+    private List<PredictedDrawDto> GenerateCooccurrencePredictions(IEnumerable<Draw> draws, int count, Random random, PredictionConstraints? constraints)
     {
         var drawsList = draws.ToList();
         var (mainFreq, luckyFreq, totalMain, totalLucky) = BuildFrequencies(drawsList);
@@ -137,7 +150,7 @@ public sealed class LotoPredictionService : ILotoPredictionService
 
         var results = new List<PredictedDrawDto>();
         var seen = new HashSet<string>();
-        var maxAttempts = count * 20;
+        var maxAttempts = Math.Max(count * 100, count);
         var attempts = 0;
 
         var maxMainWeight = globalMainWeights.Skip(1).DefaultIfEmpty(0).Max();
@@ -148,10 +161,15 @@ public sealed class LotoPredictionService : ILotoPredictionService
         {
             attempts++;
 
-            var numbers = DrawCooccurringNumbers(cooccurrenceMatrix, globalMainWeights, 5);
+            var numbers = DrawCooccurringNumbers(cooccurrenceMatrix, globalMainWeights, 5, random);
             Array.Sort(numbers);
 
-            var lucky = DrawWeightedNumber(globalLuckyWeights);
+            var lucky = DrawWeightedNumber(globalLuckyWeights, random);
+
+            if (!SatisfiesConstraints(numbers, constraints))
+            {
+                continue;
+            }
 
             var key = $"{string.Join('-', numbers)}+{lucky}";
             if (!seen.Add(key))
@@ -172,24 +190,24 @@ public sealed class LotoPredictionService : ILotoPredictionService
 
         if (results.Count < count)
         {
-            _logger.LogWarning("Unable to generate {Requested} distinct draws (co-occurrence), {Generated} generated after {Attempts} attempts.", count, results.Count, attempts);
+            _logger.LogWarning("Unable to generate {Requested} distinct draws (co-occurrence) with constraints, {Generated} generated after {Attempts} attempts.", count, results.Count, attempts);
         }
 
         return results;
     }
 
-    private int[] DrawCooccurringNumbers(int[,] cooccurrenceMatrix, double[] fallbackWeights, int numbersToPick)
+    private int[] DrawCooccurringNumbers(int[,] cooccurrenceMatrix, double[] fallbackWeights, int numbersToPick, Random random)
     {
         var selected = new List<int>();
         var selectedSet = new HashSet<int>();
 
-        var first = DrawWeightedNumber(fallbackWeights);
+        var first = DrawWeightedNumber(fallbackWeights, random);
         selected.Add(first);
         selectedSet.Add(first);
 
         while (selected.Count < numbersToPick)
         {
-            var next = DrawCooccurringNumber(selectedSet, cooccurrenceMatrix, fallbackWeights);
+            var next = DrawCooccurringNumber(selectedSet, cooccurrenceMatrix, fallbackWeights, random);
             selected.Add(next);
             selectedSet.Add(next);
         }
@@ -197,7 +215,7 @@ public sealed class LotoPredictionService : ILotoPredictionService
         return selected.ToArray();
     }
 
-    private int DrawCooccurringNumber(HashSet<int> selected, int[,] cooccurrenceMatrix, double[] fallbackWeights)
+    private int DrawCooccurringNumber(HashSet<int> selected, int[,] cooccurrenceMatrix, double[] fallbackWeights, Random random)
     {
         var candidates = new List<(int number, double weight)>();
 
@@ -217,7 +235,7 @@ public sealed class LotoPredictionService : ILotoPredictionService
             candidates.Add((number, weight));
         }
 
-        var chosen = DrawFromCandidates(candidates);
+        var chosen = DrawFromCandidates(candidates, random);
         if (chosen.HasValue)
         {
             return chosen.Value;
@@ -227,18 +245,18 @@ public sealed class LotoPredictionService : ILotoPredictionService
             .Select(c => (c.number, Math.Max(fallbackWeights[c.number], 0d)))
             .ToList();
 
-        chosen = DrawFromCandidates(fallbackCandidates);
+        chosen = DrawFromCandidates(fallbackCandidates, random);
         if (chosen.HasValue)
         {
             return chosen.Value;
         }
 
         return fallbackCandidates.Count > 0
-            ? fallbackCandidates[_random.Next(fallbackCandidates.Count)].number
-            : _random.Next(1, MainNumbersMax + 1);
+            ? fallbackCandidates[random.Next(fallbackCandidates.Count)].number
+            : random.Next(1, MainNumbersMax + 1);
     }
 
-    private int? DrawFromCandidates(List<(int number, double weight)> candidates)
+    private int? DrawFromCandidates(List<(int number, double weight)> candidates, Random random)
     {
         var totalWeight = candidates.Sum(c => c.weight);
         if (totalWeight <= 0)
@@ -246,7 +264,7 @@ public sealed class LotoPredictionService : ILotoPredictionService
             return null;
         }
 
-        var draw = _random.NextDouble() * totalWeight;
+        var draw = random.NextDouble() * totalWeight;
         double cumulative = 0;
 
         foreach (var candidate in candidates)
@@ -261,11 +279,11 @@ public sealed class LotoPredictionService : ILotoPredictionService
         return candidates.Last().number;
     }
 
-    private List<PredictedDrawDto> GeneratePredictionsWithWeights(double[] mainWeights, double[] luckyWeights, int count)
+    private List<PredictedDrawDto> GeneratePredictionsWithWeights(double[] mainWeights, double[] luckyWeights, int count, Random random, PredictionConstraints? constraints)
     {
         var results = new List<PredictedDrawDto>();
         var seen = new HashSet<string>();
-        var maxAttempts = count * 20;
+        var maxAttempts = Math.Max(count * 100, count);
         var attempts = 0;
 
         var maxMainWeight = mainWeights.Skip(1).DefaultIfEmpty(0).Max();
@@ -275,9 +293,14 @@ public sealed class LotoPredictionService : ILotoPredictionService
         while (results.Count < count && attempts < maxAttempts)
         {
             attempts++;
-            var numbers = DrawWeightedNumbersWithoutReplacement(mainWeights, 5);
+            var numbers = DrawWeightedNumbersWithoutReplacement(mainWeights, 5, random);
             Array.Sort(numbers);
-            var lucky = DrawWeightedNumber(luckyWeights);
+            var lucky = DrawWeightedNumber(luckyWeights, random);
+
+            if (!SatisfiesConstraints(numbers, constraints))
+            {
+                continue;
+            }
 
             var key = $"{string.Join('-', numbers)}+{lucky}";
             if (!seen.Add(key))
@@ -298,7 +321,7 @@ public sealed class LotoPredictionService : ILotoPredictionService
 
         if (results.Count < count)
         {
-            _logger.LogWarning("Unable to generate {Requested} distinct draws, {Generated} generated after {Attempts} attempts.", count, results.Count, attempts);
+            _logger.LogWarning("Unable to generate {Requested} distinct draws with constraints, {Generated} generated after {Attempts} attempts.", count, results.Count, attempts);
         }
 
         return results;
@@ -375,6 +398,41 @@ public sealed class LotoPredictionService : ILotoPredictionService
         return weights;
     }
 
+    private static bool SatisfiesConstraints(int[] numbers, PredictionConstraints? constraints)
+    {
+        if (constraints is null)
+        {
+            return true;
+        }
+
+        var sum = numbers.Sum();
+        var even = numbers.Count(n => n % 2 == 0);
+        var low = numbers.Count(n => n <= 25);
+
+        if (constraints.MinSum.HasValue && sum < constraints.MinSum.Value) return false;
+        if (constraints.MaxSum.HasValue && sum > constraints.MaxSum.Value) return false;
+
+        if (constraints.MinEven.HasValue && even < constraints.MinEven.Value) return false;
+        if (constraints.MaxEven.HasValue && even > constraints.MaxEven.Value) return false;
+
+        if (constraints.MinLow.HasValue && low < constraints.MinLow.Value) return false;
+        if (constraints.MaxLow.HasValue && low > constraints.MaxLow.Value) return false;
+
+        if (constraints.IncludeNumbers.Count > 0 &&
+            !constraints.IncludeNumbers.All(n => numbers.Contains(n)))
+        {
+            return false;
+        }
+
+        if (constraints.ExcludeNumbers.Count > 0 &&
+            numbers.Any(n => constraints.ExcludeNumbers.Contains(n)))
+        {
+            return false;
+        }
+
+        return true;
+    }
+
     private static int[,] BuildCooccurrenceMatrix(IEnumerable<Draw> draws)
     {
         var matrix = new int[MainNumbersMax + 1, MainNumbersMax + 1];
@@ -399,7 +457,7 @@ public sealed class LotoPredictionService : ILotoPredictionService
         return matrix;
     }
 
-    private int[] DrawWeightedNumbersWithoutReplacement(double[] weights, int count)
+    private int[] DrawWeightedNumbersWithoutReplacement(double[] weights, int count, Random random)
     {
         var candidates = new List<(int number, double weight)>();
         for (var i = 1; i < weights.Length; i++)
@@ -419,7 +477,7 @@ public sealed class LotoPredictionService : ILotoPredictionService
                 totalWeight = 1d;
             }
 
-            var draw = _random.NextDouble() * totalWeight;
+            var draw = random.NextDouble() * totalWeight;
             double cumulative = 0;
             var selectedIndex = 0;
 
@@ -440,15 +498,15 @@ public sealed class LotoPredictionService : ILotoPredictionService
         return result;
     }
 
-    private int DrawWeightedNumber(double[] weights)
+    private int DrawWeightedNumber(double[] weights, Random random)
     {
         var totalWeight = weights.Skip(1).Sum();
         if (totalWeight <= 0)
         {
-            return _random.Next(1, weights.Length);
+            return random.Next(1, weights.Length);
         }
 
-        var draw = _random.NextDouble() * totalWeight;
+        var draw = random.NextDouble() * totalWeight;
         double cumulative = 0;
         for (var i = 1; i < weights.Length; i++)
         {

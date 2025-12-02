@@ -1,0 +1,133 @@
+<section class="analysis-container">
+  <header>
+    <p class="eyebrow">Analyse</p>
+    <h1>Backtest des stratégies</h1>
+    <p class="subtitle">
+      Simule une grille pour chaque tirage réel sur la période choisie et mesure combien de numéros auraient matché.
+    </p>
+  </header>
+
+  <mat-card class="form-card">
+    <div class="form-grid">
+      <mat-form-field appearance="outline">
+        <mat-label>Stratégie</mat-label>
+        <mat-select [(value)]="selectedStrategy">
+          <mat-option *ngFor="let s of strategies" [value]="s.value">
+            <div class="option-label">{{ s.label }}</div>
+            <div class="option-detail">{{ s.detail }}</div>
+          </mat-option>
+        </mat-select>
+      </mat-form-field>
+
+      <mat-form-field appearance="outline">
+        <mat-label>Date de début</mat-label>
+        <input matInput type="date" [(ngModel)]="dateFrom" placeholder="yyyy-MM-dd">
+        <mat-hint>Format yyyy-MM-dd</mat-hint>
+      </mat-form-field>
+
+      <mat-form-field appearance="outline">
+        <mat-label>Date de fin</mat-label>
+        <input matInput type="date" [(ngModel)]="dateTo" placeholder="yyyy-MM-dd">
+        <mat-hint>Format yyyy-MM-dd</mat-hint>
+      </mat-form-field>
+
+      <mat-form-field appearance="outline">
+        <mat-label>Sample size (optionnel)</mat-label>
+        <input matInput type="number" min="1" [(ngModel)]="sampleSize" placeholder="ex: 200">
+        <mat-hint>Limite le nombre de tirages analysés</mat-hint>
+      </mat-form-field>
+    </div>
+
+    <div class="form-actions">
+      <div class="helper">
+        <p>Dates facultatives. Sans sample, tous les tirages de la période sont testés.</p>
+        <p>Le seed est déterministe : relancer l’analyse donnera les mêmes résultats pour une même plage.</p>
+      </div>
+      <button mat-raised-button color="primary" (click)="runAnalysis()" [disabled]="isLoading">
+        Lancer l'analyse
+      </button>
+    </div>
+  </mat-card>
+
+  <section class="loading" *ngIf="isLoading">
+    <mat-progress-spinner mode="indeterminate" diameter="56"></mat-progress-spinner>
+    <p>Simulation en cours...</p>
+  </section>
+
+  <section class="error" *ngIf="!isLoading && errorMessage">
+    {{ errorMessage }}
+  </section>
+
+  <section class="results" *ngIf="!isLoading && result">
+    <div class="kpi-grid">
+      <mat-card class="kpi">
+        <p class="label">Tirages analysés</p>
+        <p class="value">{{ result.totalDrawsAnalyzed }}</p>
+        <p class="sub" *ngIf="result.from || result.to">
+          Période
+          {{ formatDate(result.from) ?? 'début' }}
+          -
+          {{ formatDate(result.to) ?? 'fin' }}
+        </p>
+      </mat-card>
+      <mat-card class="kpi">
+        <p class="label">Moyenne de bons numéros</p>
+        <p class="value">{{ result.averageMatchedMain | number:'1.2-2' }}</p>
+        <p class="sub">En moyenne par tirage analysé</p>
+      </mat-card>
+      <mat-card class="kpi">
+        <p class="label">Stratégie</p>
+        <p class="value">{{ getStrategyLabel(result.strategy) }}</p>
+        <p class="sub">Backtest déterministe</p>
+      </mat-card>
+    </div>
+
+    <div class="dist-grid">
+      <mat-card class="distribution-card">
+        <div class="card-title">Distribution détaillée</div>
+        <table class="distribution-table" *ngIf="distributionRows.length > 0; else noDistribution">
+          <thead>
+            <tr>
+              <th>Bons numéros</th>
+              <th>Chance ?</th>
+              <th>Occurrences</th>
+              <th>Part</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let dist of distributionRows">
+              <td>{{ dist.matchedMain }}</td>
+              <td>
+                <span class="badge" [class.badge-success]="dist.matchedLucky" [class.badge-muted]="!dist.matchedLucky">
+                  {{ dist.matchedLucky ? 'Avec Chance' : 'Sans Chance' }}
+                </span>
+              </td>
+              <td class="count">{{ dist.count }}</td>
+              <td class="percent">{{ getPercentage(dist.count) }}</td>
+            </tr>
+          </tbody>
+        </table>
+        <ng-template #noDistribution>
+          <p class="empty">Aucune distribution à afficher.</p>
+        </ng-template>
+      </mat-card>
+
+      <mat-card class="summary-card">
+        <div class="card-title">Répartition par nombre de bons numéros</div>
+        <div class="main-line" *ngFor="let main of mainBuckets">
+          <div class="line-label">{{ main }} bon{{ main > 1 ? 's' : '' }}</div>
+          <div class="bar">
+            <div class="fill" [style.width.%]="getMainBarWidth(main)"></div>
+          </div>
+          <div class="line-value">
+            {{ getMainCount(main) }} ({{ getPercentage(getMainCount(main)) }})
+          </div>
+          <div class="line-breakdown">
+            <span class="badge badge-success">Chance {{ getCount(main, true) }}</span>
+            <span class="badge badge-muted">Sans {{ getCount(main, false) }}</span>
+          </div>
+        </div>
+      </mat-card>
+    </div>
+  </section>
+</section>

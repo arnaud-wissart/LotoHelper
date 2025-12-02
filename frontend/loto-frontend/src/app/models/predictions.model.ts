@@ -8,6 +8,18 @@ export type PredictionStrategy =
 export interface PredictionRequestDto {
   count: number;
   strategy: PredictionStrategy;
+
+  minSum?: number;
+  maxSum?: number;
+
+  minEven?: number;
+  maxEven?: number;
+
+  minLow?: number;
+  maxLow?: number;
+
+  includeNumbers?: number[];
+  excludeNumbers?: number[];
 }
 
 export interface PredictedDraw {

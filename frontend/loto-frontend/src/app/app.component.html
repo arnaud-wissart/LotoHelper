@@ -8,6 +8,7 @@
       <a routerLink="/draws" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }">Tirages</a>
       <a routerLink="/predictions" routerLinkActive="active">Prédictions</a>
       <a routerLink="/stats" routerLinkActive="active">Stats</a>
+      <a routerLink="/analysis" routerLinkActive="active">Analyse</a>
     </nav>
     <button class="theme-toggle" type="button" (click)="toggleTheme()" [attr.aria-label]="theme === 'light' ? 'Activer le mode sombre' : 'Activer le mode clair'">
       <span *ngIf="theme === 'light'">🌙</span>

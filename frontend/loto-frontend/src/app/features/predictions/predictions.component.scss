@@ -53,6 +53,33 @@ h1 {
     font-size: 0.9rem;
     line-height: 1.4;
   }
+
+  .advanced-toggle {
+    display: flex;
+    justify-content: flex-start;
+  }
+
+  .advanced {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0.75rem;
+    border: 1px dashed var(--border);
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--accent) 6%, transparent);
+  }
+
+  .advanced-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 0.75rem;
+  }
+
+  .advanced-hint {
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.85rem;
+  }
 }
 
 .animation {

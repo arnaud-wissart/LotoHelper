@@ -29,6 +29,57 @@
       </p>
     </div>
 
+    <div class="advanced-toggle">
+      <button mat-stroked-button type="button" (click)="toggleAdvanced()">
+        {{ showAdvanced ? 'Masquer' : 'Afficher' }} les options avancées
+      </button>
+    </div>
+
+    <div class="advanced" *ngIf="showAdvanced">
+      <div class="advanced-grid">
+        <mat-form-field appearance="outline">
+          <mat-label>Somme min</mat-label>
+          <input matInput type="number" [(ngModel)]="minSum" placeholder="ex : 100">
+        </mat-form-field>
+        <mat-form-field appearance="outline">
+          <mat-label>Somme max</mat-label>
+          <input matInput type="number" [(ngModel)]="maxSum" placeholder="ex : 200">
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Paires min</mat-label>
+          <input matInput type="number" [(ngModel)]="minEven" min="0" max="5" placeholder="0..5">
+        </mat-form-field>
+        <mat-form-field appearance="outline">
+          <mat-label>Paires max</mat-label>
+          <input matInput type="number" [(ngModel)]="maxEven" min="0" max="5" placeholder="0..5">
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>≤ 25 min</mat-label>
+          <input matInput type="number" [(ngModel)]="minLow" min="0" max="5" placeholder="0..5">
+        </mat-form-field>
+        <mat-form-field appearance="outline">
+          <mat-label>≤ 25 max</mat-label>
+          <input matInput type="number" [(ngModel)]="maxLow" min="0" max="5" placeholder="0..5">
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Inclure (ex: 3,7,12)</mat-label>
+          <input matInput type="text" [(ngModel)]="includeNumbersInput">
+          <mat-hint>Jusqu'à 5 numéros forcés</mat-hint>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Exclure (ex: 1,2,30)</mat-label>
+          <input matInput type="text" [(ngModel)]="excludeNumbersInput">
+        </mat-form-field>
+      </div>
+      <p class="advanced-hint">
+        Les contraintes sont optionnelles. La génération s'arrête si trop de grilles sont rejetées.
+      </p>
+    </div>
+
     <button mat-raised-button color="primary" (click)="onGenerateClick()" [disabled]="isLoading">
       Générer les prédictions
     </button>
