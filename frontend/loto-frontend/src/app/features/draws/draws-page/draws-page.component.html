@@ -3,9 +3,29 @@
     <div>
       <p class="eyebrow">Tirages</p>
       <h1>Derniers résultats</h1>
-      <p class="subtitle">Liste des 100 derniers tirages connus.</p>
+      <p class="subtitle">Liste paginée avec filtre par période.</p>
     </div>
   </header>
+
+  <section class="draws-filters" aria-label="Filtres des tirages">
+    <mat-form-field appearance="outline" class="range-field">
+      <mat-label>Période</mat-label>
+      <mat-date-range-input [rangePicker]="picker">
+        <input matStartDate placeholder="Date de début" [(ngModel)]="dateFrom">
+        <input matEndDate placeholder="Date de fin" [(ngModel)]="dateTo">
+      </mat-date-range-input>
+      <mat-datepicker-toggle matSuffix [for]="picker"></mat-datepicker-toggle>
+      <mat-date-range-picker #picker (closed)="onDateRangeChanged()"></mat-date-range-picker>
+    </mat-form-field>
+
+    <div class="quick-filters">
+      <button mat-stroked-button type="button" (click)="applyPreset('7d')">7 derniers jours</button>
+      <button mat-stroked-button type="button" (click)="applyPreset('30d')">30 derniers jours</button>
+      <button mat-stroked-button type="button" (click)="applyPreset('6m')">6 derniers mois</button>
+      <button mat-stroked-button type="button" (click)="applyPreset('1y')">1 an</button>
+      <button mat-button type="button" (click)="clearDateFilter()">Tout</button>
+    </div>
+  </section>
 
   <div *ngIf="isLoading" class="status" aria-live="polite">Chargement des tirages...</div>
 
@@ -15,28 +35,52 @@
   </div>
 
   <div *ngIf="!isLoading && !errorMessage && draws.length === 0" class="status">
-    Aucune donnée à afficher pour le moment.
+    Aucun tirage à afficher pour cette période.
   </div>
 
-  <table *ngIf="!isLoading && !errorMessage && draws.length > 0" class="draws-table" aria-label="Derniers tirages">
-    <caption class="sr-only">Tableau des 100 derniers tirages</caption>
-    <thead>
-      <tr>
-        <th scope="col">Date</th>
-        <th scope="col">Numéros</th>
-        <th scope="col">Chance</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr *ngFor="let draw of draws">
-        <td data-label="Date">{{ formatDate(draw.drawDate) }}</td>
-        <td class="numbers" data-label="Numéros">
-          <span class="ball" *ngFor="let num of [draw.number1, draw.number2, draw.number3, draw.number4, draw.number5]">{{ num }}</span>
-        </td>
-        <td data-label="Chance">
-          <span class="ball lucky">{{ draw.luckyNumber }}</span>
-        </td>
-      </tr>
-    </tbody>
-  </table>
+  <div class="draws-table-wrapper" *ngIf="draws.length > 0">
+    <table class="draws-table" aria-label="Derniers tirages">
+      <caption class="sr-only">Tableau des tirages</caption>
+      <thead>
+        <tr>
+          <th scope="col">Date</th>
+          <th scope="col">Jour</th>
+          <th scope="col">Numéros</th>
+          <th scope="col">Chance</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let d of draws">
+          <td data-label="Date">{{ d.drawDate | date:'dd/MM/yyyy' }}</td>
+          <td data-label="Jour">{{ d.drawDayName }}</td>
+          <td class="numbers" data-label="Numéros">
+            <span class="ball" *ngFor="let num of [d.number1, d.number2, d.number3, d.number4, d.number5]">{{ num }}</span>
+          </td>
+          <td data-label="Chance">
+            <span class="ball lucky">{{ d.luckyNumber }}</span>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="pagination-bar" *ngIf="totalPages > 0">
+    <button mat-icon-button (click)="onPageChange(page - 1)" [disabled]="page <= 1" aria-label="Page précédente">
+      <mat-icon>chevron_left</mat-icon>
+    </button>
+    <span>Page {{ page }} / {{ totalPages }} ({{ totalCount }} tirages)</span>
+    <button mat-icon-button (click)="onPageChange(page + 1)" [disabled]="page >= totalPages" aria-label="Page suivante">
+      <mat-icon>chevron_right</mat-icon>
+    </button>
+
+    <mat-form-field appearance="outline" class="page-size-field">
+      <mat-label>Par page</mat-label>
+      <mat-select [(value)]="pageSize" (selectionChange)="onPageSizeChange($event.value)">
+        <mat-option [value]="10">10</mat-option>
+        <mat-option [value]="20">20</mat-option>
+        <mat-option [value]="50">50</mat-option>
+        <mat-option [value]="100">100</mat-option>
+      </mat-select>
+    </mat-form-field>
+  </div>
 </section>

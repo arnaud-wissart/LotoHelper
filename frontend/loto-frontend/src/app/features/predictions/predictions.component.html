@@ -1,0 +1,61 @@
+<section class="predictions-container">
+  <header>
+    <p class="eyebrow">Prédictions</p>
+    <h1>Simulations pondérées</h1>
+    <p class="subtitle">Générez des grilles basées sur l'historique. Résultats purement indicatifs.</p>
+  </header>
+
+  <section class="controls">
+    <div class="count-control">
+      <mat-form-field appearance="outline">
+        <mat-label>Nombre de tirages à générer</mat-label>
+        <input matInput type="number" [(ngModel)]="count" [min]="minCount" [max]="maxCount">
+        <mat-hint>Entre {{ minCount }} et {{ maxCount }}</mat-hint>
+      </mat-form-field>
+    </div>
+
+    <button mat-raised-button color="primary" (click)="onGenerateClick()" [disabled]="isLoading">
+      Générer les prédictions
+    </button>
+  </section>
+
+  <section class="animation" *ngIf="isAnimating">
+    <div class="spinner-wrapper">
+      <mat-progress-spinner mode="indeterminate" diameter="64"></mat-progress-spinner>
+    </div>
+    <div class="animation-text">
+      <p>Analyse de l'historique des tirages...</p>
+      <p>Calcul des probabilités et génération de vos grilles...</p>
+    </div>
+  </section>
+
+  <section class="error" *ngIf="!isAnimating && errorMessage">
+    {{ errorMessage }}
+  </section>
+
+  <section class="results" *ngIf="!isAnimating && !errorMessage">
+    <div class="meta" *ngIf="predictions.length > 0">
+      <p>
+        {{ predictions.length }} tirage(s) généré(s)
+        <span *ngIf="formatGeneratedAt()">le {{ formatGeneratedAt() }}</span>
+      </p>
+    </div>
+
+    <div class="predictions-list" *ngIf="predictions.length > 0; else noPredictions">
+      <mat-card class="prediction-card" *ngFor="let p of predictions; trackBy: trackByIndex">
+        <div class="numbers">
+          <span class="ball" *ngFor="let n of p.numbers">{{ n }}</span>
+          <span class="ball lucky">C {{ p.luckyNumber }}</span>
+        </div>
+        <div class="score"
+             matTooltip="Indice relatif basé sur les fréquences passées : plus le score est haut, plus la grille reprend des numéros historiquement fréquents (aucune garantie de gain).">
+          Score : {{ getScoreAsPercent(p.score) }}
+        </div>
+      </mat-card>
+    </div>
+
+    <ng-template #noPredictions>
+      <p class="empty">Aucune prédiction générée pour le moment. Choisissez un nombre de tirages et cliquez sur “Générer les prédictions”.</p>
+    </ng-template>
+  </section>
+</section>
