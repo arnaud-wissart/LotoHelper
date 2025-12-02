@@ -7,17 +7,18 @@ import {
   StatsFrequencies,
   StatsOverview
 } from '../models/stats.models';
+import { apiUrl } from '../core/api.config';
 
 @Injectable({ providedIn: 'root' })
 export class StatsService {
   constructor(private http: HttpClient) {}
 
   getOverview(): Observable<StatsOverview> {
-    return this.http.get<StatsOverview>('/api/stats/overview');
+    return this.http.get<StatsOverview>(apiUrl('/stats/overview'));
   }
 
   getFrequencies(): Observable<StatsFrequencies> {
-    return this.http.get<StatsFrequencies>('/api/stats/frequencies');
+    return this.http.get<StatsFrequencies>(apiUrl('/stats/frequencies'));
   }
 
   getPatterns(bucketSize?: number): Observable<PatternDistribution> {
@@ -25,7 +26,7 @@ export class StatsService {
     if (bucketSize && bucketSize > 0) {
       params = params.set('bucketSize', bucketSize);
     }
-    return this.http.get<PatternDistribution>('/api/stats/patterns', { params });
+    return this.http.get<PatternDistribution>(apiUrl('/stats/patterns'), { params });
   }
 
   getCooccurrence(baseNumber: number, top?: number): Observable<CooccurrenceStats> {
@@ -33,6 +34,6 @@ export class StatsService {
     if (top && top > 0) {
       params = params.set('top', top);
     }
-    return this.http.get<CooccurrenceStats>('/api/stats/cooccurrence', { params });
+    return this.http.get<CooccurrenceStats>(apiUrl('/stats/cooccurrence'), { params });
   }
 }

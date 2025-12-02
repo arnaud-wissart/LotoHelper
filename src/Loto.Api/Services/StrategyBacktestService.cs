@@ -34,7 +34,7 @@ public sealed class StrategyBacktestService : IStrategyBacktestService
 
         if (from.HasValue && to.HasValue && from > to)
         {
-            throw new ArgumentException("dateFrom ne peut pas être postérieure à dateTo.");
+            throw new ArgumentException("dateFrom ne peut pas etre posterieure a dateTo.");
         }
 
         var allDraws = await _dbContext.Draws
@@ -99,7 +99,7 @@ public sealed class StrategyBacktestService : IStrategyBacktestService
             var predicted = predictionResponse.Draws.FirstOrDefault();
             if (predicted is null)
             {
-                _logger.LogWarning("Aucune prédiction générée pour le tirage {DrawId}", draw.Id);
+                _logger.LogWarning("Aucune prediction generee pour le tirage {DrawId}", draw.Id);
                 continue;
             }
 

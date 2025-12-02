@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
-import { Observable, catchError, of } from 'rxjs';
+import { Observable, catchError, throwError } from 'rxjs';
+import { apiUrl } from '../core/api.config';
 import { Draw } from '../models/draw';
 import { PagedResult } from '../models/paged-result';
 import { DrawsFilter } from '../models/draws-filter';
@@ -25,16 +26,10 @@ export class DrawsService {
       params = params.set('dateTo', filter.dateTo);
     }
 
-    return this.http.get<PagedResult<Draw>>('/api/draws', { params }).pipe(
+    return this.http.get<PagedResult<Draw>>(apiUrl('/draws'), { params }).pipe(
       catchError(err => {
-        console.error('Erreur lors de la récupération des tirages', err);
-        return of({
-          items: [],
-          page: filter.page,
-          pageSize: filter.pageSize,
-          totalCount: 0,
-          totalPages: 0
-        });
+        console.error('Erreur lors de la recuperation des tirages', err);
+        return throwError(() => err);
       })
     );
   }

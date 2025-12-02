@@ -58,9 +58,13 @@ public class FdjIngestionWorker : BackgroundService
             using var scope = _scopeFactory.CreateScope();
             var ingestionService = scope.ServiceProvider.GetRequiredService<IFdjIngestionService>();
 
-            // Ensure freshness based on min age, then run ingestion.
-            await ingestionService.EnsureFreshDataAsync(_minRefreshAge, stoppingToken);
-            var result = await ingestionService.RunFullOrIncrementalAsync(stoppingToken);
+            var result = await ingestionService.EnsureFreshDataAsync(_minRefreshAge, stoppingToken);
+            if (result is null)
+            {
+                _logger.LogInformation("FDJ ingestion ({Reason}) skipped (last run still fresh, min age {MinAge} minutes).", reason, _minRefreshAge.TotalMinutes);
+                return;
+            }
+
             _logger.LogInformation(
                 "FDJ ingestion ({Reason}) finished in {Duration}s: total {Total}, inserted {Inserted}, skipped {Skipped}. Full={Full}, Incremental={Incremental}",
                 reason,

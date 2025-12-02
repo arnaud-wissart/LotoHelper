@@ -10,7 +10,7 @@ namespace Loto.Ingestion.Worker;
 public interface IFdjIngestionService
 {
     Task<FdjIngestionResult> RunFullOrIncrementalAsync(CancellationToken cancellationToken);
-    Task EnsureFreshDataAsync(TimeSpan minAge, CancellationToken cancellationToken);
+    Task<FdjIngestionResult?> EnsureFreshDataAsync(TimeSpan minAge, CancellationToken cancellationToken);
 }
 
 public class FdjIngestionService : IFdjIngestionService
@@ -52,10 +52,7 @@ public class FdjIngestionService : IFdjIngestionService
         {
             await using var dbContext = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
 
-            var lastDrawDate = await dbContext.Draws.MaxAsync(d => (DateTime?)d.DrawDate, cancellationToken);
-
-            var usedFull = true; // toujours la même archive
-            var usedIncremental = false;
+            var hasExistingDraws = await dbContext.Draws.AnyAsync(cancellationToken);
 
             var parsedDraws = new List<Draw>();
 
@@ -76,7 +73,6 @@ public class FdjIngestionService : IFdjIngestionService
 
             var toInsert = parsedDraws
                 .Where(draw => existingSet.Add(BuildKey(draw.OfficialDrawId, draw.DrawDate, draw.Number1, draw.Number2, draw.Number3, draw.Number4, draw.Number5, draw.LuckyNumber)))
-                .Where(draw => lastDrawDate == null || draw.DrawDate > lastDrawDate || usedFull)
                 .ToList();
 
             if (toInsert.Count > 0)
@@ -86,6 +82,9 @@ public class FdjIngestionService : IFdjIngestionService
 
             var inserted = await dbContext.SaveChangesAsync(cancellationToken);
             var skipped = parsedCount - inserted;
+
+            var usedFull = !hasExistingDraws;
+            var usedIncremental = hasExistingDraws;
 
             DrawsIngestedCounter.Add(inserted);
             IngestionDurationSeconds.Record(stopwatch.Elapsed.TotalSeconds);
@@ -119,21 +118,7 @@ public class FdjIngestionService : IFdjIngestionService
         }
     }
 
-    private async Task<List<Draw>> ParseArchivesAsync(IReadOnlyList<Stream> streams, CancellationToken cancellationToken)
-    {
-        var result = new List<Draw>();
-        foreach (var stream in streams)
-        {
-            await using var s = stream;
-            await foreach (var draw in _parser.ParseNewLotoArchiveAsync(s, cancellationToken))
-            {
-                result.Add(draw);
-            }
-        }
-        return result;
-    }
-
-    public async Task EnsureFreshDataAsync(TimeSpan minAge, CancellationToken cancellationToken)
+    public async Task<FdjIngestionResult?> EnsureFreshDataAsync(TimeSpan minAge, CancellationToken cancellationToken)
     {
         DateTimeOffset? last;
         lock (_lock)
@@ -141,11 +126,14 @@ public class FdjIngestionService : IFdjIngestionService
             last = _lastSuccessUtc;
         }
 
-        if (last is null || (DateTimeOffset.UtcNow - last.Value) > minAge)
+        if (last is not null && (DateTimeOffset.UtcNow - last.Value) <= minAge)
         {
-            _logger.LogInformation("EnsureFreshData triggered. Last success: {LastSuccess}", last);
-            await RunFullOrIncrementalAsync(cancellationToken);
+            _logger.LogInformation("Skipping ingestion because last success {LastSuccess} is within min age {MinAge}.", last, minAge);
+            return null;
         }
+
+        _logger.LogInformation("EnsureFreshData triggered. Last success: {LastSuccess}", last);
+        return await RunFullOrIncrementalAsync(cancellationToken);
     }
 
     private static string BuildKey(string? officialDrawId, DateTime drawDate, int n1, int n2, int n3, int n4, int n5, int luckyNumber) =>

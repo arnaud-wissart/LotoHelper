@@ -9,13 +9,19 @@ var connectionString = builder.Configuration.GetConnectionString("loto-db")
                        ?? builder.Configuration["ConnectionStrings:loto-db"]
                        ?? throw new InvalidOperationException("Connection string 'loto-db' is not configured.");
 
-builder.Services.Configure<FdjOptions>(builder.Configuration.GetSection("Fdj"));
+builder.Services.AddOptions<FdjOptions>()
+    .Bind(builder.Configuration.GetSection("Fdj"))
+    .Validate(opt => opt.IntervalMinutes > 0, "Fdj:IntervalMinutes must be greater than zero.")
+    .Validate(opt => opt.MinRefreshAgeMinutes > 0, "Fdj:MinRefreshAgeMinutes must be greater than zero.")
+    .Validate(opt => opt.UseLocalFile || !string.IsNullOrWhiteSpace(opt.NewLotoArchiveUrl), "Fdj:NewLotoArchiveUrl must be configured when UseLocalFile is false.")
+    .Validate(opt => !opt.UseLocalFile || !string.IsNullOrWhiteSpace(opt.LocalArchivePath), "Fdj:LocalArchivePath must be configured when UseLocalFile is true.")
+    .ValidateOnStart();
 builder.Services.AddHttpClient();
 
 builder.Services.AddDbContextFactory<LotoDbContext>(options =>
     options.UseNpgsql(connectionString));
 
-builder.Services.AddScoped<IFdjDataSource>(sp =>
+builder.Services.AddSingleton<IFdjDataSource>(sp =>
 {
     var options = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<FdjOptions>>();
     if (options.Value.UseLocalFile)
@@ -31,8 +37,8 @@ builder.Services.AddScoped<IFdjDataSource>(sp =>
         sp.GetRequiredService<ILogger<HttpNewLotoDataSource>>());
 });
 
-builder.Services.AddScoped<IFdjParser, NewLotoZipCsvParser>();
-builder.Services.AddScoped<IFdjIngestionService, FdjIngestionService>();
+builder.Services.AddSingleton<IFdjParser, NewLotoZipCsvParser>();
+builder.Services.AddSingleton<IFdjIngestionService, FdjIngestionService>();
 
 builder.Services.AddLotoOpenTelemetry(
     builder.Configuration,
