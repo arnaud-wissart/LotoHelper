@@ -44,6 +44,7 @@ builder.Services.AddOpenTelemetry()
         metrics.AddAspNetCoreInstrumentation();
         metrics.AddHttpClientInstrumentation();
         metrics.AddRuntimeInstrumentation();
+        metrics.AddMeter(LotoPredictionService.MeterName);
         metrics.AddOtlpExporter();
     });
 
@@ -186,7 +187,7 @@ app.MapPost("/api/predictions", async (
     CancellationToken ct) =>
 {
     var count = request.Count <= 0 ? 1 : Math.Min(request.Count, 100);
-    var result = await predictionService.GeneratePredictionsAsync(count, ct);
+    var result = await predictionService.GeneratePredictionsAsync(count, request.Strategy, ct);
     return Results.Ok(result);
 })
 .WithName("GeneratePredictions")

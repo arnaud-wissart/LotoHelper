@@ -14,6 +14,17 @@
       </mat-form-field>
     </div>
 
+    <div class="strategy-control">
+      <mat-form-field appearance="outline">
+        <mat-label>Stratégie</mat-label>
+        <mat-select [(value)]="selectedStrategy">
+          <mat-option *ngFor="let s of strategies" [value]="s.value">
+            {{ s.label }}
+          </mat-option>
+        </mat-select>
+      </mat-form-field>
+    </div>
+
     <button mat-raised-button color="primary" (click)="onGenerateClick()" [disabled]="isLoading">
       Générer les prédictions
     </button>
@@ -39,6 +50,9 @@
         {{ predictions.length }} tirage(s) généré(s)
         <span *ngIf="formatGeneratedAt()">le {{ formatGeneratedAt() }}</span>
       </p>
+      <p *ngIf="lastUsedStrategy">
+        Stratégie : {{ getStrategyLabel(lastUsedStrategy) }}
+      </p>
     </div>
 
     <div class="predictions-list" *ngIf="predictions.length > 0; else noPredictions">
@@ -55,7 +69,7 @@
     </div>
 
     <ng-template #noPredictions>
-      <p class="empty">Aucune prédiction générée pour le moment. Choisissez un nombre de tirages et cliquez sur “Générer les prédictions”.</p>
+      <p class="empty">Aucune prédiction générée pour le moment. Choisissez un nombre de tirages et cliquez sur "Générer les prédictions".</p>
     </ng-template>
   </section>
 </section>

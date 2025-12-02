@@ -1,5 +1,5 @@
 import { Component } from '@angular/core';
-import { PredictedDraw, PredictionsResponse } from '../../models/predictions.model';
+import { PredictedDraw, PredictionStrategy, PredictionsResponse } from '../../models/predictions.model';
 import { PredictionsService } from '../../services/predictions.service';
 
 @Component({
@@ -12,6 +12,17 @@ export class PredictionsComponent {
   count = 10;
   minCount = 1;
   maxCount = 100;
+
+  strategies: { value: PredictionStrategy; label: string }[] = [
+    { value: 'Uniform',           label: 'Uniforme' },
+    { value: 'FrequencyGlobal',   label: 'Fréquentiel global' },
+    { value: 'FrequencyRecent',   label: 'Fréquentiel récent' },
+    { value: 'Cold',              label: 'Numéros en retard' },
+    { value: 'Cooccurrence',      label: 'Co-occurrence' }
+  ];
+
+  selectedStrategy: PredictionStrategy = 'FrequencyGlobal';
+  lastUsedStrategy: PredictionStrategy | null = null;
 
   isLoading = false;
   isAnimating = false;
@@ -35,7 +46,7 @@ export class PredictionsComponent {
 
     const startedAt = Date.now();
 
-    this.predictionsService.generate(this.count).subscribe({
+    this.predictionsService.generate(this.count, this.selectedStrategy).subscribe({
       next: (response: PredictionsResponse) => {
         const remaining = this.animationDurationMs - (Date.now() - startedAt);
         const delay = remaining > 0 ? remaining : 0;
@@ -45,6 +56,7 @@ export class PredictionsComponent {
           this.isAnimating = false;
           this.predictions = response.draws;
           this.generatedAtUtc = response.generatedAtUtc;
+          this.lastUsedStrategy = this.selectedStrategy;
         }, delay);
       },
       error: err => {
@@ -72,5 +84,10 @@ export class PredictionsComponent {
   getScoreAsPercent(score: number): string {
     const pct = Math.round(score * 100);
     return `${pct} %`;
+  }
+
+  getStrategyLabel(strategy: PredictionStrategy | null): string | undefined {
+    const match = this.strategies.find(s => s.value === strategy);
+    return match?.label;
   }
 }

@@ -6,6 +6,7 @@ import { MatCardModule } from '@angular/material/card';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatSelectModule } from '@angular/material/select';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { PredictionsComponent } from './predictions.component';
 
@@ -21,6 +22,7 @@ import { PredictionsComponent } from './predictions.component';
     MatButtonModule,
     MatProgressSpinnerModule,
     MatCardModule,
+    MatSelectModule,
     MatTooltipModule
   ]
 })

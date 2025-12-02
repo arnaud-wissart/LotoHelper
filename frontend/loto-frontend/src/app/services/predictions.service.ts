@@ -1,7 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
-import { PredictionsResponse } from '../models/predictions.model';
+import { PredictionRequestDto, PredictionStrategy, PredictionsResponse } from '../models/predictions.model';
 
 @Injectable({
   providedIn: 'root'
@@ -9,7 +9,8 @@ import { PredictionsResponse } from '../models/predictions.model';
 export class PredictionsService {
   constructor(private readonly http: HttpClient) { }
 
-  generate(count: number): Observable<PredictionsResponse> {
-    return this.http.post<PredictionsResponse>('/api/predictions', { count });
+  generate(count: number, strategy: PredictionStrategy): Observable<PredictionsResponse> {
+    const body: PredictionRequestDto = { count, strategy };
+    return this.http.post<PredictionsResponse>('/api/predictions', body);
   }
 }
